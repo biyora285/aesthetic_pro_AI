@@ -1,0 +1,11 @@
+streamlit
+torch
+torchvision
+pillow
+numpy
+scipy
+diffusers
+transformers
+accelerate
+openai
+pyngrok
