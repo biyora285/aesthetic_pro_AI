@@ -1,7 +1,7 @@
-import gradio as gr
+import streamlit as st
+from PIL import Image
 import torch
 from diffusers import StableDiffusionImg2ImgPipeline
-from PIL import Image
 
 # -------------------------------
 # Load Stable Diffusion pipeline
@@ -9,7 +9,7 @@ from PIL import Image
 device = "cuda" if torch.cuda.is_available() else "cpu"
 pipe = StableDiffusionImg2ImgPipeline.from_pretrained(
     "runwayml/stable-diffusion-v1-5",
-    torch_dtype=torch.float16 if device=="cuda" else torch.float32
+    torch_dtype=torch.float16 if device == "cuda" else torch.float32
 )
 pipe = pipe.to(device)
 # Disable NSFW filter for demo purposes
@@ -42,19 +42,26 @@ def generate_variations(input_image, prompt, num_variations=2):
     return results
 
 # -------------------------------
-# Gradio Interface
+# Streamlit Interface
 # -------------------------------
-demo = gr.Interface(
-    fn=generate_variations,
-    inputs=[
-        gr.Image(type="pil", label="Upload Product Image"),
-        gr.Textbox(label="Aesthetic Prompt", placeholder="Steampunk smartwatch with brass gears"),
-        gr.Slider(minimum=1, maximum=4, step=1, value=2, label="Number of Variations")
-    ],
-    outputs=gr.Gallery(label="Generated Variations", show_label=True),
-    title="AesthetIQ - AI Product Aesthetics Tester",
-    description="Upload a product image, type a photorealistic prompt, and generate multiple AI variations."
-)
+st.title("AesthetIQ - AI Product Aesthetics Tester")
+st.write("Upload a product image, type a photorealistic prompt, and generate multiple AI variations.")
 
-if __name__ == "__main__":
-    demo.launch()
+# Upload image
+uploaded_image = st.file_uploader("Upload Product Image", type=["png", "jpg", "jpeg"])
+prompt = st.text_input("Aesthetic Prompt", "Steampunk smartwatch with brass gears")
+num_variations = st.slider("Number of Variations", min_value=1, max_value=4, value=2)
+
+if uploaded_image and prompt:
+    input_image = Image.open(uploaded_image)
+    st.image(input_image, caption="Original Image", use_column_width=True)
+    
+    if st.button("Generate Variations"):
+        with st.spinner("Generating AI variations..."):
+            variations = generate_variations(input_image, prompt, num_variations)
+        
+        st.success("Variations Generated!")
+        # Display results in columns
+        cols = st.columns(len(variations))
+        for col, img in zip(cols, variations):
+            col.image(img, use_column_width=True)
