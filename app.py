@@ -48,4 +48,22 @@ def generate_aesthetic_text(input_image, prompt, num_variations=3):
 # -------------------------------
 # Streamlit UI
 # -------------------------------
-st.set_page_config(page_title="AesthetIQ - AI Product Ae_
+st.set_page_config(page_title="AesthetIQ - AI Product Aesthetics Tester", layout="wide")
+st.title("🎨 AesthetIQ - AI Product Aesthetics Tester")
+st.markdown(
+    "Upload a **product image** and enter a **style prompt** to get multiple **text-based aesthetic variations** describing material, texture, lighting, and environment."
+)
+
+uploaded_file = st.file_uploader("Upload Product Image (JPG or PNG)", type=["jpg", "png"])
+prompt = st.text_area("Enter Aesthetic Prompt", placeholder="Steampunk smartwatch with brass gears")
+num_variations = st.slider("Number of Variations", 1, 6, 3)
+
+if uploaded_file is not None and st.button("Generate Aesthetic Variations"):
+    input_image = Image.open(uploaded_file)
+    st.image(input_image, caption="Uploaded Product", width=300)
+
+    with st.spinner("Generating aesthetic descriptions..."):
+        output_text = generate_aesthetic_text(input_image, prompt, num_variations)
+    
+    st.success("✅ Generated Aesthetic Variations:")
+    st.text_area("Output", output_text, height=300)
