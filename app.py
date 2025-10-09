@@ -12,7 +12,7 @@ import os
 # -------------------------------
 # Either set your API key in environment variables or paste here
 # os.environ["OPENAI_API_KEY"] = "YOUR_OPENAI_API_KEY"
-openai.api_key = os.getenv("OPENAI_API_KEY")
+openai.api_key = os.getenv("73590d15-fde9-4be3-8c4b-8386f91efa52")
 
 # -------------------------------
 # Load Stable Diffusion Model
@@ -88,3 +88,4 @@ if st.button("Generate & Test"):
         st.image(image, caption="Generated Product Concept", use_column_width=True)
         st.subheader(f"✨ Aesthetic Score: {score}/100")
         st.write(feedback)
+
