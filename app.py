@@ -1,77 +1,51 @@
 import streamlit as st
-import torch
-from diffusers import StableDiffusionImg2ImgPipeline
 from PIL import Image
 
 # -------------------------------
-# Page setup
+# Function to analyze dominant color
 # -------------------------------
-st.set_page_config(page_title="AesthetIQ - AI Product Aesthetics Tester", layout="wide")
-st.title("AesthetIQ - AI Product Aesthetics Tester")
-st.markdown(
-    "Upload your product image (watch, backpack, etc.), type a photorealistic prompt, and generate multiple AI variations."
-)
+def analyze_image(img):
+    img = img.convert("RGB")
+    colors = img.getcolors(maxcolors=1000000)
+    most_common_color = max(colors, key=lambda x: x[0])[1]
+    return most_common_color
 
 # -------------------------------
-# Upload image
+# Generate aesthetic text variations
 # -------------------------------
-uploaded_file = st.file_uploader("Upload Product Image (JPG/PNG)", type=["jpg", "png"])
-prompt = st.text_area("Enter Aesthetic Prompt (e.g., 'Steampunk smartwatch with brass gears')")
-num_variations = st.slider("Number of Variations", 1, 6, 4)
+def generate_aesthetic_text(input_image, prompt, num_variations=3):
+    if not prompt.strip():
+        prompt = "A modern product"
+
+    dominant_color = analyze_image(input_image)
+
+    templates = [
+        "Variation {i}: {prompt}, featuring a {color_desc} finish, ambient lighting, and a {style_desc} environment.",
+        "Variation {i}: {prompt} with {color_desc} material, realistic reflections, and {style_desc} background.",
+        "Variation {i}: {prompt} crafted with {color_desc} texture, dramatic lighting, and placed in {style_desc} scene."
+    ]
+
+    style_variations = [
+        "steampunk-inspired workshop",
+        "futuristic high-tech lab",
+        "minimalist modern showroom",
+        "vintage antique shop",
+        "brutalist architectural setting",
+        "lush outdoor nature scene"
+    ]
+
+    color_desc = f"dominant color RGB{dominant_color}"
+
+    variations = []
+    for i in range(num_variations):
+        template = templates[i % len(templates)]
+        style_desc = style_variations[i % len(style_variations)]
+        text = template.format(i=i + 1, prompt=prompt, color_desc=color_desc, style_desc=style_desc)
+        variations.append(text)
+
+    return "\n\n".join(variations)
 
 # -------------------------------
-# Load Stable Diffusion pipeline
+# Streamlit UI
 # -------------------------------
-@st.cache_resource(show_spinner=True)
-def load_pipe():
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    pipe = StableDiffusionImg2ImgPipeline.from_pretrained(
-        "runwayml/stable-diffusion-v1-5",
-        torch_dtype=torch.float16 if device=="cuda" else torch.float32
-    )
-    pipe = pipe.to(device)
-    pipe.safety_checker = lambda images, **kwargs: (images, [False]*len(images))
-    return pipe, device
-
-pipe, device = load_pipe()
-
-# -------------------------------
-# Preprocess image
-# -------------------------------
-def preprocess_image(img, size=(512,512)):
-    if img.mode != "RGB":
-        img = img.convert("RGB")
-    return img.resize(size)
-
-# -------------------------------
-# Generate variations
-# -------------------------------
-if uploaded_file and prompt:
-    if st.button("Generate Variations"):
-        input_image = preprocess_image(Image.open(uploaded_file))
-        st.info("Generating images... this may take a minute depending on GPU availability.")
-
-        generated_images = []
-        for i in range(num_variations):
-            img = pipe(
-                prompt=prompt,
-                image=input_image,
-                strength=0.35,
-                guidance_scale=7.5,
-                num_inference_steps=30
-            ).images[0]
-            generated_images.append(img)
-
-        # Display images in columns
-        cols = st.columns(num_variations)
-        for idx, img in enumerate(generated_images):
-            with cols[idx % num_variations]:
-                st.image(img, caption=f"Variation {idx+1}", use_column_width=True)
-                # Provide download button
-                img_path = f"variation_{idx+1}.png"
-                img.save(img_path)
-                st.download_button(
-                    label=f"Download Variation {idx+1}",
-                    data=open(img_path, "rb"),
-                    file_name=img_path
-                )
+st.set_page_config(page_title="AesthetIQ - AI Product Ae_
