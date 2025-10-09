@@ -1,91 +1,88 @@
+# -------------------------------
+# 1️⃣ Install dependencies (run once)
+# -------------------------------
+# !pip install streamlit diffusers transformers accelerate safetensors torch torchvision pillow opencv-python --quiet
+
+# -------------------------------
+# 2️⃣ Imports
+# -------------------------------
 import streamlit as st
-from diffusers import StableDiffusionPipeline
 import torch
+from diffusers import StableDiffusionImg2ImgPipeline
 from PIL import Image
-import numpy as np
-from scipy.stats import entropy
-import openai
 import os
 
 # -------------------------------
-# Optional: Set OpenAI API Key
+# 3️⃣ Set page config
 # -------------------------------
-# Either set your API key in environment variables or paste here
-# os.environ["OPENAI_API_KEY"] = "YOUR_OPENAI_API_KEY"
-openai.api_key = os.getenv("73590d15-fde9-4be3-8c4b-8386f91efa52")
-
-# -------------------------------
-# Load Stable Diffusion Model
-# -------------------------------
-device = "cuda" if torch.cuda.is_available() else "cpu"
-pipe = StableDiffusionPipeline.from_pretrained(
-    "runwayml/stable-diffusion-v1-5",
-    torch_dtype=torch.float16 if device=="cuda" else torch.float32
+st.set_page_config(
+    page_title="AesthetIQ - AI Product Aesthetics Tester",
+    layout="wide"
 )
-pipe = pipe.to(device)
+st.title("AesthetIQ - AI Product Aesthetics Tester")
+st.markdown(
+    "Upload your product image (watch, backpack, etc.), type a photorealistic style prompt, and generate multiple AI variations."
+)
 
 # -------------------------------
-# Aesthetic Scoring Function
+# 4️⃣ Upload Product Image
 # -------------------------------
-def aesthetic_score(image):
-    img = np.array(image.resize((256,256))) / 255.0
-    brightness = np.mean(img)
-    contrast = img.std()
-    hist, _ = np.histogram(img, bins=256, range=(0,1))
-    color_entropy = entropy(hist + 1e-7)
-    edges = np.mean(np.abs(np.gradient(np.mean(img, axis=2))))
-    score = (0.3*brightness + 0.3*contrast + 0.2*(1/color_entropy) + 0.2*edges)*100
-    return round(score, 2)
+uploaded_file = st.file_uploader("Upload Product Image (JPG/PNG)", type=["jpg","png"])
+prompt = st.text_area("Enter Aesthetic Prompt (e.g., 'Steampunk smartwatch with brass gears')", height=80)
+num_variations = st.slider("Number of Variations", min_value=1, max_value=6, value=4)
 
 # -------------------------------
-# Function to Suggest Prompt Improvements
+# 5️⃣ Load Pipeline (API-free)
 # -------------------------------
-def improve_prompt(prompt):
-    if not openai.api_key:
-        return prompt  # skip improvement if no API key
-    try:
-        response = openai.ChatCompletion.create(
-            model="gpt-4",
-            messages=[{"role":"user", "content":
-                       f"Suggest improvements to make this product prompt more visually appealing: {prompt}"}]
-        )
-        improved_prompt = response['choices'][0]['message']['content']
-        return improved_prompt
-    except:
-        return prompt
+@st.cache_resource(show_spinner=True)
+def load_pipe():
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    pipe = StableDiffusionImg2ImgPipeline.from_pretrained(
+        "runwayml/stable-diffusion-v1-5",
+        torch_dtype=torch.float16 if device=="cuda" else torch.float32
+    )
+    pipe = pipe.to(device)
+    pipe.safety_checker = lambda images, **kwargs: (images, [False]*len(images))
+    return pipe, device
+
+pipe, device = load_pipe()
 
 # -------------------------------
-# Streamlit Frontend
+# 6️⃣ Function to preprocess image
 # -------------------------------
-st.set_page_config(page_title="AI Aesthetics Tester", layout="centered")
-st.title("🎨 AI-Generated Aesthetics Tester")
-st.write("Generate product concept images and get interactive feedback to improve aesthetics.")
+def preprocess_image(img, size=(512,512)):
+    if img.mode != "RGB":
+        img = img.convert("RGB")
+    img = img.resize(size)
+    return img
 
-user_prompt = st.text_area("Enter Product Description:",
-                           "A futuristic eco-friendly water bottle with smooth curves and metallic finish")
-
-use_feedback = st.checkbox("Use AI prompt improvement")
-
-if st.button("Generate & Test"):
-    with st.spinner("Generating your product concept..."):
-        # Improve prompt if enabled
-        prompt_to_use = improve_prompt(user_prompt) if use_feedback else user_prompt
-        if use_feedback:
-            st.write("💡 AI Suggested Prompt:", prompt_to_use)
+# -------------------------------
+# 7️⃣ Generate Button
+# -------------------------------
+if uploaded_file and prompt:
+    if st.button("Generate Variations"):
+        input_image = Image.open(uploaded_file)
+        input_image = preprocess_image(input_image)
         
-        # Generate image
-        image = pipe(prompt_to_use).images[0]
-        
-        # Compute aesthetic score
-        score = aesthetic_score(image)
-        if score > 75:
-            feedback = "✅ Visually appealing and well-balanced design."
-        elif score >= 50:
-            feedback = "⚙️ Decent design, but could improve contrast or color harmony."
-        else:
-            feedback = "❌ Needs refinement; lacks strong aesthetic appeal."
-        
-        st.image(image, caption="Generated Product Concept", use_column_width=True)
-        st.subheader(f"✨ Aesthetic Score: {score}/100")
-        st.write(feedback)
+        st.info("Generating images... This may take a minute or two depending on GPU availability.")
+        generated_images = []
+        for i in range(num_variations):
+            generated = pipe(
+                prompt=prompt,
+                image=input_image,
+                strength=0.35,
+                guidance_scale=7.5,
+                num_inference_steps=30
+            ).images[0]
+            generated_images.append(generated)
+
+        # Display images in columns
+        cols = st.columns(num_variations)
+        for idx, img in enumerate(generated_images):
+            with cols[idx % num_variations]:
+                st.image(img, caption=f"Variation {idx+1}", use_column_width=True)
+                # Save button for each image
+                img_path = f"variation_{idx+1}.png"
+                img.save(img_path)
+                st.download_button(label=f"Download Variation {idx+1}", data=open(img_path,"rb"), file_name=img_path)
 
